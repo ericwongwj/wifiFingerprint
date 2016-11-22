@@ -3,6 +3,9 @@ package test2;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.TreeSet;
 
 public class Tools {
 	
@@ -152,6 +155,23 @@ public class Tools {
 		return invalid;
 	}
 	
+	public static TreeSet generateRandArr(double d,int bound){
+		if(d>1||d<0){
+			System.out.println("wrong density");
+			return null;
+		}
+		
+		Random rand=new Random();
+		int num=(int) (bound*d);
+		TreeSet<Integer> set=new TreeSet<>();
+		while(set.size()!=num){
+			int r=rand.nextInt(bound);
+			if(!set.contains(r))
+				set.add(r);
+		}
+		return set;
+	}
+	
 	public static void displayAllRSS(ArrayList<ArrayList<Map<String, Double>>> offRssList, List<String>aplist){
 		for(int i=0;i<offRssList.size();i++){
 			System.out.println(i+1+"th pos"+ Constant.OFF_POS_ARR[i]+"***********************");
@@ -224,6 +244,11 @@ public class Tools {
 		}
 	}
 	
+	public static void showSet(Set set){
+		System.out.println("Set size is "+set.size());
+		for(Object i:set)
+			System.out.println(i);
+	}
 	public static void main(String[] args) {
 //		System.out.println(calculateDeviation(0, 0, 1, 1));
 	}

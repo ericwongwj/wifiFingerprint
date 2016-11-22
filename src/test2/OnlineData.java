@@ -33,6 +33,7 @@ public class OnlineData {
 	
 	public int number=46;
 	private double availableRSS=-80.0;	
+	private double timeDensity=1.0;//采集次数密度
 	
 	public OnlineData(String path) {
 		initBr(path);

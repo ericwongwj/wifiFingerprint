@@ -9,9 +9,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,6 +27,7 @@ public class OfflineData {
 
 	public static List<String> aplist= Arrays.asList(Constant.AP_ARR);//27
 
+	public static List<String> poslist= Arrays.asList(Constant.OFF_POS_ARR);
 	ArrayList<ArrayList<Map<String, Double>>> offRssList=new ArrayList<>(130);/**每一个点每一次采集每一个ap*/
 	ArrayList<Map<String, Double>> avgRssList=new ArrayList<>();/**平均值*/
 	ArrayList <Integer[]> apVectorlist=new ArrayList<>();/**0-n向量组成的数组记录ap是否出现若干次*/
@@ -34,19 +40,37 @@ public class OfflineData {
 	public int number=130;
 	
 	private int neglect_frequency=22;//KNN设成?偏差最小
-	private int collecting_times=8;//每个采集点的采集次数
+	private double posDensity=1.0;//采集点密度
+	private double timeDensity=1.0;//采集次数密度
 	private static double defaultRSS=-100.0;//默认missed AP为-100
 	private static double availableRSS=-80.0;//仅使用大于该值的RSS
-
-	public void setNeglectFrequency(int f){
-		neglect_frequency=f;
-	}
 	
+	public static void main(String[] args) {
+//		OfflineData offline=new OfflineData(Constant.OFF_PATH);
+		OfflineData offline=new OfflineData(Constant.OFF_PATH,0.2,1.0);
+//		Tools.displayAllRSS(offline.offRssList, offline.aplist);
+		showMapList(offline.avgRssList);
+//		Tools.showList(aplist);
+		Tools.showList(poslist);
+//		showApVectorList(offline.apVectorlist);
+//		showRssVectorList(offline.rssVectorlist);
+	}
+
 	public OfflineData(String path) {
 		initBufferReader(path);
 		initRSSData();
 		calculateOffAvgRss();
 		buildRssVectorList();
+	}
+	
+	public OfflineData(String path, double posD, double timeD) {
+		initBufferReader(path);
+		posDensity=posD;
+		timeDensity=timeD;
+		initRandPosRss(posD,Constant.OFF_POS_ARR.length);
+//		initRandTimeRss(timeD, 110);
+		calculateOffAvgRss();
+//		buildRssVectorList();
 	}
 	
 	public void initRSSData(){
@@ -81,7 +105,6 @@ public class OfflineData {
 				if(endtime_matcher.find()){
 					offRssList.add(eachPosRss);
 					apVectorlist.add(apVector);
-					cnt++;times=0;
 				}
 			}			
 		}catch (IOException e) {
@@ -139,8 +162,113 @@ public class OfflineData {
 		}
 	}
 	
-	public void randomRead(){}
+	public void initRandPosRss(double d,int bound){
+		posDensity=d;
+		TreeSet<Integer> set=Tools.generateRandArr(d, bound);
+		poslist=new ArrayList<>();
+		try {
+			String line;
+			Map<String,Double> eachTimeRss = null;
+			ArrayList<Map<String, Double>> eachPosRss = null;//大小110（次）
+			Integer[] apVector=new Integer[XArr.length];//0-1向量
+			boolean isInSet=false;
+			int cnt=0;
+			while((line=br.readLine())!=null ){
+				Matcher starttime_matcher=Constant.starttime_pattern.matcher(line);
+				if(starttime_matcher.find()){
+					eachPosRss=new ArrayList<>(110);
+					apVector=new Integer[XArr.length];
+					Tools.cleanArr(apVector);
+					cnt++;
+					if(set.contains(cnt)){
+						isInSet=true;
+						poslist.add(Constant.OFF_POS_ARR[cnt-1]);
+					}
+					else isInSet=false;
+				}
+				if(isInSet){
+					Matcher newline_matcher=Constant.newline_pattern.matcher(line);
+					if(newline_matcher.find()&&line.contains(Constant.fixedid)){
+						eachTimeRss=new HashMap<>();
+						String target=line.replace(Constant.fixedid, "");
+						Matcher rm=Constant.rss_pattern.matcher(target);
+						while(rm.find()){//只存储出现的ap
+							String each_ap="00:"+rm.group(1);//m1 mac地址 m2：rss
+							double rss=Double.valueOf(rm.group(2));
+							eachTimeRss.put(each_ap, rss);
+							
+							apVector[aplist.indexOf(each_ap)]++;
+						}
+						eachPosRss.add(eachTimeRss);	
+					}
+					
+					Matcher endtime_matcher=Constant.endtime_pattern.matcher(line);
+					if(endtime_matcher.find()){
+						offRssList.add(eachPosRss);
+						apVectorlist.add(apVector);
+					}
+				}
+				
+			}			
+		}catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 	
+	public void initRandTimeRss(double d,int bound){
+		timeDensity=d;
+		TreeSet<Integer> set=Tools.generateRandArr(d, bound);
+		try {
+			String line;
+			Map<String,Double> eachTimeRss = null;
+			ArrayList<Map<String, Double>> eachPosRss = null;//大小110（次）
+			Integer[] apVector=new Integer[XArr.length];//0-1向量
+			boolean isInSet=false;
+			int cnt=0;
+			while((line=br.readLine())!=null ){
+				Matcher starttime_matcher=Constant.starttime_pattern.matcher(line);
+				if(starttime_matcher.find()){
+					set=Tools.generateRandArr(d, bound);
+					cnt=0;
+					
+					eachPosRss=new ArrayList<>(110);
+					apVector=new Integer[XArr.length];
+					Tools.cleanArr(apVector);	
+				}
+				Matcher newline_matcher=Constant.newline_pattern.matcher(line);
+				if(newline_matcher.find()&&line.contains(Constant.fixedid)){
+					eachTimeRss=new HashMap<>();
+					String target=line.replace(Constant.fixedid, "");
+					Matcher rm=Constant.rss_pattern.matcher(target);
+					
+					cnt++;
+					if(set.contains(cnt)){
+						isInSet=true;
+						poslist.add(Constant.OFF_POS_ARR[cnt-1]);
+					}
+					
+					else isInSet=false;
+					while(rm.find()){//只存储出现的ap
+						String each_ap="00:"+rm.group(1);//m1 mac地址 m2：rss
+						double rss=Double.valueOf(rm.group(2));
+						eachTimeRss.put(each_ap, rss);
+						
+						apVector[aplist.indexOf(each_ap)]++;
+					}
+					eachPosRss.add(eachTimeRss);	
+				}
+				
+				Matcher endtime_matcher=Constant.endtime_pattern.matcher(line);
+				if(endtime_matcher.find()){
+					offRssList.add(eachPosRss);
+					apVectorlist.add(apVector);
+				}	
+			}			
+		}catch (IOException e) {
+			e.printStackTrace();
+		}		
+	}
+
 	public void buildCenterPointsInfo(){	}
 	
 	public void buildBetterRSS(double quality){	}
@@ -151,20 +279,11 @@ public class OfflineData {
 	
 	public double caculateProbility(){return 0;}
 	
-	public static void main(String[] args) {
-		OfflineData offline=new OfflineData(Constant.OFF_PATH);
-//		Tools.displayAllRSS(offline.offRssList, offline.aplist);
-//		Tools.showMapList(offline.avgRssList);
-//		Tools.showList(aplist);
-//		showApVectorList(offline.apVectorlist);
-		showRssVectorList(offline.rssVectorlist);
-	}
-	
 	public static void showMapList(List<Map<String,Double>> list){
 		System.out.println("size="+list.size());
 		int i=0;
 		for(Map<String,Double> map:list){
-			System.out.println(Constant.OFF_POS_ARR[i++]);
+			System.out.println(poslist.get(i++));
 			for(String ap:map.keySet())
 				System.out.println(ap+" "+map.get(ap));
 		}
