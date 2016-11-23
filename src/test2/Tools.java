@@ -155,7 +155,7 @@ public class Tools {
 		return invalid;
 	}
 	
-	public static TreeSet generateRandArr(double d,int bound){
+	public static TreeSet<Integer> generateRandArr(double d,int bound){
 		if(d>1||d<0){
 			System.out.println("wrong density");
 			return null;
