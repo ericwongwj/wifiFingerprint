@@ -109,13 +109,13 @@ public class Tools {
 		return nearestPosList;
 	}
 	
-	public static ArrayList<Integer> reduceField(ArrayList <Integer[]> offApVectorlist,
+	public static ArrayList<Integer> reduceField(List<Integer[]> apVectorlist,
 												Integer[] onApVector){//返回一个缩小的搜索空间的位置索引表
 		ArrayList<Integer> invaildPosList;//存放序号
 		int[] similarityArr=new int[130];//分别对ap出现的次数进行计数
 		cleanArr(similarityArr);
 		int posid=0;
-		for(Integer[]offApVector:offApVectorlist){//对130个位置进行遍历
+		for(Integer[]offApVector:apVectorlist){//对130个位置进行遍历
 			int k=0;
 			for(Integer j:onApVector){//仅仅对第pointid个点的ap列表进行比较
 				//System.out.println(j+" "+apvector.get(k));//apvector里面是代表有无的01
@@ -172,10 +172,10 @@ public class Tools {
 		return set;
 	}
 	
-	public static void displayAllRSS(ArrayList<ArrayList<Map<String, Double>>> offRssList, List<String>aplist){
-		for(int i=0;i<offRssList.size();i++){
+	public static void displayAllRSS(List<List<Map<String, Double>>> allRssList, List<String>aplist){
+		for(int i=0;i<allRssList.size();i++){
 			System.out.println(i+1+"th pos"+ Constant.OFF_POS_ARR[i]+"***********************");
-			ArrayList<Map<String,Double>> eachpos=offRssList.get(i);
+			List<Map<String,Double>> eachpos=allRssList.get(i);
 			for(int j=0;j<eachpos.size();j++){
 				Map<String,Double> eachtime=eachpos.get(j);
 				System.out.println("time "+j);

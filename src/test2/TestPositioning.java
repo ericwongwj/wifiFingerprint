@@ -14,8 +14,8 @@ import java.math.*;
  * *****/
 
 public class TestPositioning {
-	static OfflineData offline=new OfflineData(Constant.OFF_PATH);
-	static OnlineData online=new OnlineData(Constant.ON_PATH);
+	static OfflineData offline;
+	static OnlineData online;
 	
 	static List <String> aplist= Arrays.asList(Constant.AP_ARR);//aplist必须统一
 	
@@ -24,20 +24,14 @@ public class TestPositioning {
 	static double []deviationArr=new double[46];
 	
 	public static void main(String[] args) {
-		init();//初始化各个数据列表
-		//initOffVectorList();
-		//initOnVectorList();
+		offline=new OfflineData(Constant.OFF_PATH,new OfflineData.Options());
+		online=new OnlineData(Constant.ON_PATH,1.0);
+		
 		for(int c=0;c<46;c++){//
-//			KMeans.KNN(offline, online.avgRssList.get(c), 4, c);
+//			Deterministic.KNN(offline, online.avgRssList.get(c), 4, c);
 			KNN(online.avgRssList.get(c), 4, c);
 		}
 		Tools.calculateOverAllDeviationAndVariance(deviationArr);
-	}
-	
-	static void init(){
-//		offline.buildWeightRSSList();
-//		ReadOffline.randomRead();//完全初始化offline的数据	
-		//penaltyList=ReadOffline.penaltyList;
 	}
 	
 	public static void KNN(Map<String,Double> onrss, int k,int index){

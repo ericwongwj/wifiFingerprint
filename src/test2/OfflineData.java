@@ -34,7 +34,8 @@ public class OfflineData {
 	List<List<Map<String, Double>>> allRssList=new ArrayList<>(130);//二者只初始化一次
 	List <Integer[]> apVectorlist=new ArrayList<>();/**0-n向量组成的数组记录ap是否出现若干次*/
 
-	ArrayList<Map<String, Double>> avgRssList=new ArrayList<>();/**平均值*/
+	List<Map<String, Double>> penaltyList=new ArrayList<>();/**和平均值相对于 记录每个点每个ap的可信度(1-P(miss))*/
+	List<Map<String, Double>> avgRssList=new ArrayList<>();/**平均值*/
 	List <List<Map<Double, Integer>>> rssVectorlist=new ArrayList<>();/**每个点每个ap出现的rss以及对应的次数 130*density-26-n*/
 	
 	//应当在读取文件之后再填充
@@ -43,7 +44,7 @@ public class OfflineData {
 	
 	public int number=130;
 	
-	private int neglect_frequency=22;//KNN设成?偏差最小
+	private int neglect_frequency=0;//KNN设成?偏差最小  22
 	private double posDensity;//采集点密度
 	private double timeDensity;//采集次数密度
 	private static double defaultRSS;//默认missed AP为-100
@@ -56,18 +57,18 @@ public class OfflineData {
 		double availableRSS=-80.0;//仅使用大于该值的RSS
 		
 		public Options() {}
-		public Options(int what, double value) {
+		public Options(String what, double value) {
 			switch(what){
-			case 0:
+			case "pos":
 				pDensity=value;
 				break;
-			case 1:
+			case "time":
 				tDensity=value;
 				break;
-			case 2:
+			case "default":
 				defaultRSS=value;
 				break;
-			case 3:
+			case "available":
 				availableRSS=value;
 				break;
 			default:
@@ -83,10 +84,12 @@ public class OfflineData {
 	} 
 	
 	public static void main(String[] args) {
-		Options ops=new Options(0,0.2);
+		Options ops=new Options();
+//		ops.pDensity=0.1;
+//		ops.tDensity=0.1;
 		OfflineData offline=new OfflineData(Constant.OFF_PATH,ops);
 		
-//		Tools.displayAllRSS(offline.offRssList, offline.aplist);
+//		Tools.displayAllRSS(offline.allRssList, offline.aplist);
 //		showMapList(offline.avgRssList);
 //		Tools.showList(aplist);
 //		Tools.showList(poslist);
@@ -102,21 +105,22 @@ public class OfflineData {
 		initBufferReader(path);
 		initRSSData();
 		buildRssVectorList();//build的是全部的情况
+		buildPenaltyList();
 
-//		if(options.po)
-		initRandPosAndTimeRss(0.2,1.0);
-//		initRandTimeRss(timeD, 110);
-//		generateAvgRss();
-
+		if(posDensity==1 && timeDensity==1)
+			generateAvgRss(allRssList);
+		else if(posDensity<1 || timeDensity<1){
+			List<List<Map<String, Double>>> tempRss=initRandPosAndTimeRss(posDensity,timeDensity);
+			generateAvgRss(tempRss);
+		}
 	}
-	
 	
 	public void initRSSData(){
 		try {
 			String line;
 			Map<String,Double> eachTimeRss = null;
-			ArrayList<Map<String, Double>> eachPosRss = null;//大小110（次）
-			Integer[] apVector=new Integer[XArr.length];//0-1向量
+			List<Map<String, Double>> eachPosRss = null;//大小110（次）
+			Integer[] apVector=new Integer[aplist.size()];//0-1向量
 			while((line=br.readLine())!=null ){
 				Matcher newline_matcher=Constant.newline_pattern.matcher(line);
 				if(newline_matcher.find()&&line.contains(Constant.fixedid)){
@@ -130,7 +134,7 @@ public class OfflineData {
 						
 						apVector[aplist.indexOf(each_ap)]++;
 					}
-					eachPosRss.add(eachTimeRss);	
+					eachPosRss.add(eachTimeRss);//先添加	
 				}
 				Matcher starttime_matcher=Constant.starttime_pattern.matcher(line);
 				if(starttime_matcher.find()){
@@ -149,26 +153,32 @@ public class OfflineData {
 		}
 	}
 	
-	//TODO:
 	public List<List<Map<String, Double>>> initRandPosAndTimeRss(double pd,double td){
 		List<List<Map<String, Double>>> randRssList=new ArrayList<>();
-		posDensity=pd;
-		timeDensity=td;
 		TreeSet<Integer> pset=Tools.generateRandArr(pd, 130);
 		TreeSet<Integer> tset=Tools.generateRandArr(td, 110);
-		List<Double> tlist=new ArrayList<>();
+
 		poslist=new ArrayList<>();
+		List<Map<String, Double>> eachPosRss = null;
+		Map<String,Double> eachTimeRss = null;
 		for(List<Map<String, Double>> maplist:allRssList){
 			if(pset.contains(allRssList.indexOf(maplist))){//130次中的一些随机
+				eachPosRss=new ArrayList<>();//大小为110*td
+				
 				poslist.add(Constant.OFF_POS_ARR[allRssList.indexOf(maplist)]);
+				
 				for(Map<String,Double> map:maplist){
-					if(tset.contains(maplist.indexOf(map))){//110次中的一些随机
+					if(tset.contains(maplist.indexOf(map))){//110次中的一些随机 次数减少 apVector/rssVector啥的也在变
+						eachTimeRss=new HashMap<>();
+						eachPosRss.add(eachTimeRss);//先添加	
+						
 						for(String ap:map.keySet())
-							tlist.add(map.get(ap));
-						System.out.println(tlist.size());
-						tlist=new ArrayList<>();
+							eachTimeRss.put(ap, map.get(ap));
+						
 					}
 				}
+				
+				randRssList.add(eachPosRss);
 			}
 		}
 		return randRssList;
@@ -191,7 +201,7 @@ public class OfflineData {
 			}	
 			for(int j=0;j<aplist.size();j++){
 				if(count[j]!=0){
-					double avg=(count[j]<neglect_frequency ? defaultRSS : sum[j]/count[j]);//检测到的次数太少
+					double avg=sum[j]/count[j];//检测到的次数太少 (count[j]<neglect_frequency ? defaultRSS : sum[j]/count[j]);
 					eachavgrss.put(aplist.get(j), avg);
 				}
 			}
@@ -222,12 +232,24 @@ public class OfflineData {
 		}
 	}
 	
+	/**
+	 * 直接对apVector处理
+	 */
+	public void buildPenaltyList(){
+		int c=0;
+		for(Integer[] apVector:apVectorlist){
+			for(int cnt:apVector)
+				if(cnt!=0)
+					c++;
+			System.out.println(c);
+			c=0;
+		}
+	}
 
 	public void buildCenterPointsInfo(){	}
 	
 	public void buildBetterRSS(double quality){	}
 	
-	public void buildPenaltyList(){}
 	
 	public void buildWeightRSSList(){}
 	

@@ -11,38 +11,58 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 
+import test2.OfflineData.Options;
+
 public class OnlineData {
-	/**
-	 * 此组织形式只是在pc上跑数据集用 实际应用应该改为单次的
-	 */	
+	
 	private File file;
 	private BufferedReader br;
 
 	public static List<String> aplist= Arrays.asList(Constant.AP_ARR);//27
 
-	ArrayList<ArrayList<Map<String, Double>>> onRssList=new ArrayList<>(46);//每一个点每一次采集每一个ap
-	ArrayList<Map<String, Double>> avgRssList=new ArrayList<>();
-	ArrayList <Integer[]> apVectorlist=new ArrayList<>();/**0-n向量组成的数组记录ap是否出现*/
-	List <List<Map<Double, Integer>>> rssVectorlist=new ArrayList<>(46);/**每个点每个ap出现的rss以及对应的次数 46-26-n*/
+	/**
+	 * 每一个点每一次采集每一个ap 存储所有数据 改变算法时 在这上面读取 产生新的avgRssList
+	*/
+	List<List<Map<String, Double>>> allRssList=new ArrayList<>(46);//二者只初始化一次
+	List <Integer[]> apVectorlist=new ArrayList<>(46);/**0-n向量组成的数组记录ap是否出现若干次*/
 
+	List<Map<String, Double>> avgRssList=new ArrayList<>();/**平均值*/
+	List <List<Map<Double, Integer>>> rssVectorlist=new ArrayList<>();/**每个点每个ap出现的rss以及对应的次数 130*density-26-n*/
+	
 	//应当在读取文件之后再填充
 	public double[] XArr=Constant.ON_X_ARR;
 	public double[] YArr=Constant.ON_Y_ARR;
-	
+		
 	public int number=46;
 	private double availableRSS=-80.0;	
 	private double timeDensity=1.0;//采集次数密度
 	
-	public OnlineData(String path) {
+	public static void main(String[] args) {
+		OnlineData on=new OnlineData(Constant.ON_PATH,0.3);			
+//		showApVectorList(on.apVectorlist);
+//		showRssVectorList(on.rssVectorlist);		
+//		Tools.displayAllRSS(on.allRssList, aplist);
+		showMapList(on.avgRssList);
+	}
+	
+	
+	public OnlineData(String path, double td) {
+		timeDensity=td;
 		initBr(path);
 		initRSSData();
-//		Tools.displayAllRSS(onRssList, aplist);
-		calculateOnAvgRss();
-		buildRssVectorList();
-	}
+		buildRssVectorList();//build的是全部的情况
 
+		if(timeDensity==1)
+			generateAvgRss(allRssList);
+		else if(timeDensity<1){
+			List<List<Map<String, Double>>> tempRss=initRandTimeRss(timeDensity,timeDensity);
+			generateAvgRss(tempRss);
+		}
+	}
+	
 	/**
 	 * eachTimeRss中只put了能侦测到的ap以及对应的rss
 	 */
@@ -50,9 +70,8 @@ public class OnlineData {
 		try {
 			String line;
 			Map<String,Double> eachTimeRss = null;
-			ArrayList<Map<String, Double>> eachPosRss = null;//大小110（次）
+			List<Map<String, Double>> eachPosRss = null;//大小110（次）
 			Integer[] apVector=new Integer[XArr.length];//0-1向量
-			ArrayList<Double> rssVector=new ArrayList<>();
 			while((line=br.readLine())!=null ){
 				Matcher newline_matcher=Constant.newline_pattern.matcher(line);
 				if(newline_matcher.find()&&line.contains(Constant.fixedid)){
@@ -64,24 +83,20 @@ public class OnlineData {
 						double rss=Double.valueOf(rm.group(2));
 						eachTimeRss.put(each_ap, rss);
 						
-						if(aplist.indexOf(each_ap)>=0)//注意有offline之外的ap
+						if(aplist.contains(each_ap))//因为有线下不存在的ap
 							apVector[aplist.indexOf(each_ap)]++;
-						
-						if(!rssVector.contains(rss))
-							rssVector.add(rss);
 					}
-					eachPosRss.add(eachTimeRss);	
+					eachPosRss.add(eachTimeRss);//先添加	
 				}
 				Matcher starttime_matcher=Constant.starttime_pattern.matcher(line);
 				if(starttime_matcher.find()){
-					eachPosRss=new ArrayList<>(46);
+					eachPosRss=new ArrayList<>(110);
 					apVector=new Integer[XArr.length];
 					Tools.cleanArr(apVector);;
-					rssVector=new ArrayList<>();
 				}
 				Matcher endtime_matcher=Constant.endtime_pattern.matcher(line);
 				if(endtime_matcher.find()){
-					onRssList.add(eachPosRss);
+					allRssList.add(eachPosRss);
 					apVectorlist.add(apVector);
 				}
 			}			
@@ -89,11 +104,36 @@ public class OnlineData {
 			e.printStackTrace();
 		}
 	}
-	private void calculateOnAvgRss(){
+	
+	public List<List<Map<String, Double>>> initRandTimeRss(double pd,double td){
+		List<List<Map<String, Double>>> randRssList=new ArrayList<>();
+		TreeSet<Integer> tset=Tools.generateRandArr(td, 110);
+
+		List<Map<String, Double>> eachPosRss = null;
+		Map<String,Double> eachTimeRss = null;
+		for(List<Map<String, Double>> maplist:allRssList){
+			eachPosRss=new ArrayList<>();//大小为110*td
+			
+			for(Map<String,Double> map:maplist){
+				if(tset.contains(maplist.indexOf(map))){//110次中的一些随机 次数减少 apVector/rssVector啥的也在变
+					eachTimeRss=new HashMap<>();
+					eachPosRss.add(eachTimeRss);//先添加	
+					
+					for(String ap:map.keySet())
+						eachTimeRss.put(ap, map.get(ap));
+					
+				}
+			}
+			
+			randRssList.add(eachPosRss);	
+		}
+		return randRssList;
+	}
+
+	private void generateAvgRss(List<List<Map<String, Double>>> rssList){
 		int []count=new int [aplist.size()];
 		double []sum=new double[aplist.size()];int t=0;
-		for(ArrayList<Map<String,Double>> eachpos : onRssList){
-//			System.out.println(Constant.ON_POS_ARR[t++]);
+		for(List<Map<String, Double>> eachpos : rssList){
 			Map<String,Double> eachavgrss=new HashMap<>();
 			avgRssList.add(eachavgrss);
 			for(Map<String,Double> eachtime : eachpos){
@@ -104,12 +144,11 @@ public class OnlineData {
 						count[i]++;
 					}
 				}
-			}
+			}	
 			for(int j=0;j<aplist.size();j++){
 				if(count[j]!=0){
-					double avg= sum[j]/count[j];
+					double avg=sum[j]/count[j];//检测到的次数太少 (count[j]<neglect_frequency ? defaultRSS : sum[j]/count[j]);
 					eachavgrss.put(aplist.get(j), avg);
-//					System.out.println(aplist.get(j)+" "+avg);
 				}
 			}
 			Tools.cleanArr(count, sum);
@@ -120,7 +159,7 @@ public class OnlineData {
 	 * 有一些ap在同一行中重复出现 所以数据会少
 	 */
 	public void buildRssVectorList(){
-		for(ArrayList<Map<String,Double>> onePosRss:onRssList){//46次
+		for(List<Map<String, Double>> onePosRss:allRssList){//130次
 			List<Map<Double, Integer>> apRssList=new ArrayList<>(27);
 			for(String ap:aplist){//27次
 				Map<Double, Integer> oneApRss=new HashMap<>();
@@ -142,13 +181,7 @@ public class OnlineData {
 		}
 	}
 	
-	public static void main(String[] args) {
-		OnlineData on=new OnlineData(Constant.ON_PATH);			
-//		Tools.showList(on.aplist);
-//		showApVectorList(on.apVectorlist);
-		showRssVectorList(on.rssVectorlist);
-	}
-	
+
 	public static void showMapList(List<Map<String,Double>> list){
 		System.out.println("size="+list.size());
 		int i=0;
