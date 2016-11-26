@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.math.*;
@@ -26,63 +28,109 @@ public class TestPositioning {
 	public static void main(String[] args) {
 		offline=new OfflineData(Constant.OFF_PATH,new OfflineData.Options());
 		online=new OnlineData(Constant.ON_PATH,1.0);
-		
+		Tools.similar=23;//不提高精度 24以上误差更大
 		for(int c=0;c<46;c++){//
-//			Deterministic.KNN(offline, online.avgRssList.get(c), 4, c);
-			KNN(online.avgRssList.get(c), 4, c);
+//			KNN(online.avgRssList.get(c), 1, c);//5,6精度最好
+			WKNN(online.avgRssList.get(c), 6, c);//6精度最好
 		}
 		Tools.calculateOverAllDeviationAndVariance(deviationArr);
 	}
 	
 	public static void KNN(Map<String,Double> onrss, int k,int index){
-		//narrow 改为得到一个排除的数组 循环的时候直接判断
-		ArrayList<Integer> invalidField=Tools.reduceField(offline.apVectorlist, online.apVectorlist.get(index));//参数c代表第c个点
-		ArrayList<Double> distanceList=new ArrayList<>();
+		//narrow 改为得到一个排除的数组 循环的时候直接判断 
+		List<Integer> invalidField=Tools.reduceField(offline.apVectorlist, online.apVectorlist.get(index));//参数c代表第c个点
+		Map<Double,Integer> distanceMap=new TreeMap<>();//位置（0-129）-距离
+		System.out.println("invalid field size:"+invalidField.size());
+
 		int p=0;
 		for(int i=0;i<Constant.OFF_POS_ARR.length;i++){
 			if(invalidField.contains(i))//对限定范围后的所有点
 				continue;
-			
+			//计算距离 只计算线下出现的ap 线上线下只出现一个的 默认另一个为-100
 			Map<String,Double> offrss=offline.avgRssList.get(i);
-			double distance=0;
+			double distance;
 			double sum=0;
 			for(int j=0;j<aplist.size();j++){
 				double off,on;
 				if(offrss.get(aplist.get(j))!=null)
 					off=offrss.get(aplist.get(j));
 				else off=-100.0;
+				
 				if(onrss.get(aplist.get(j))!=null)
 					on=onrss.get(aplist.get(j));
 				else on=-100.0;
 				sum+=(off-on)*(off-on);
 			}
 			distance=Math.sqrt(sum);
-			distanceList.add(distance);
-			System.out.println(Constant.OFF_POS_ARR[p++]+" distance "+": "+distance);//输出off与on的距离
+			distanceMap.put(distance,i);
+//			System.out.println(Constant.OFF_POS_ARR[p++]+" distance "+": "+distance);//输出off与on的距离
 		}
 		
-		int []nearestpoints=Tools.findNNearest(k, distanceList);//第一个参数为取点的个数 返回distancelist当中的位置
-		double []nearestdistances=new double[k];
 		double xsum=0.0,ysum=0.0;
-		for(int a=0;a<k;a++){
-			xsum+=offline.XArr[nearestpoints[a]];
-			ysum+=offline.YArr[nearestpoints[a]];
-			nearestdistances[a]=distanceList.get(nearestpoints[a]);
-//			System.out.println(Constant.OFF_POS_ARR[nearestpoints[a]]+" d="+nearestdistances[a]);
+		int kk=0;
+		for(Double d:distanceMap.keySet()){
+			if(kk++==k)
+				break;
+			int pos=distanceMap.get(d);
+			xsum+=offline.XArr[pos];
+			ysum+=offline.YArr[pos];
+			System.out.println(Constant.OFF_POS_ARR[pos]+" d="+d);
 		}
+		
 		double []result={xsum/k,ysum/k};
 		deviationArr[index]=Tools.calculateDeviation(online.XArr[index], online.YArr[index], result[0], result[1]);
 		System.out.println("result:"+result[0]+","+result[1]+"   true position:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
 	}
 	
-	static void initOnRandom(){
-//		ReadOffline.readOff();
-//		ReadOnline.initFile();
-//		ReadOnline.initPosAndAP();
-//		ReadOnline.randomRead();
-	}
+	public static void WKNN(Map<String,Double> onrss, int k,int index){
+		//narrow 改为得到一个排除的数组 循环的时候直接判断 
+		Map<Double,Integer> distanceMap=new TreeMap<>();//位置（0-129）-距离
+		for(int i=0;i<Constant.OFF_POS_ARR.length;i++){
+			//计算距离 只计算线下出现的ap 线上线下只出现一个的 默认另一个为-100
+			Map<String,Double> offrss=offline.avgRssList.get(i);
+			double distance;
+			double sum=0;
+			for(int j=0;j<aplist.size();j++){
+				double off,on;
+				if(offrss.get(aplist.get(j))!=null)
+					off=offrss.get(aplist.get(j));
+				else off=-100.0;
+				
+				if(onrss.get(aplist.get(j))!=null)
+					on=onrss.get(aplist.get(j));
+				else on=-100.0;
+				sum+=(off-on)*(off-on);
+			}
+			distance=Math.sqrt(sum);
+			distanceMap.put(distance,i);
+//			System.out.println(Constant.OFF_POS_ARR[p++]+" distance "+": "+distance);//输出off与on的距离
+		}
+		
+		double x=0.0,y=0.0,weight=0.0,total=0.0;
+		double []weights=new double[k];
+		Iterator<Map.Entry<Double, Integer>> iterator = distanceMap.entrySet().iterator();
+		for(int a=0;a<k;a++){
+			Map.Entry<Double, Integer> entry = iterator.next();  
+			int pos=entry.getValue();
+			weights[a]=1/entry.getKey();
+			weight+=1/entry.getKey();
+//			System.out.println(offline.XArr[pos]+","+offline.YArr[pos]+" d="+entry.getKey()+" weight="+weights[a]);
+		}
+		System.out.println("total weight="+weight);
+		Iterator<Map.Entry<Double, Integer>> entries = distanceMap.entrySet().iterator();
 
-	
+		for(int b=0;b<k;b++){
+			Map.Entry<Double, Integer> entry = entries.next();  
+			int pos=entry.getValue();
+			x+=offline.XArr[pos]*weights[b]/weight;
+			y+=offline.YArr[pos]*weights[b]/weight;
+			System.out.println(Constant.OFF_POS_ARR[pos]+" d="+entry.getKey()+" w="+weights[b]);
+		}
+		double []result={x,y};
+		deviationArr[index]=Tools.calculateDeviation(online.XArr[index], online.YArr[index], result[0], result[1]);
+		System.out.println("result:"+result[0]+","+result[1]+"  real pos:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
+				
+	}	
 	
 	
 }

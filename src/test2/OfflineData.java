@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -91,10 +92,11 @@ public class OfflineData {
 		
 //		Tools.displayAllRSS(offline.allRssList, offline.aplist);
 //		showMapList(offline.avgRssList);
+//		showMapList(offline.penaltyList);
 //		Tools.showList(aplist);
 //		Tools.showList(poslist);
 //		showApVectorList(offline.apVectorlist);
-//		showRssVectorList(offline.rssVectorlist);
+		showRssVectorList(offline.rssVectorlist);
 	}
 
 	public OfflineData(String path, Options options) {
@@ -120,7 +122,7 @@ public class OfflineData {
 			String line;
 			Map<String,Double> eachTimeRss = null;
 			List<Map<String, Double>> eachPosRss = null;//大小110（次）
-			Integer[] apVector=new Integer[aplist.size()];//0-1向量
+			Integer[] apVector=new Integer[aplist.size()];//0-n向量
 			while((line=br.readLine())!=null ){
 				Matcher newline_matcher=Constant.newline_pattern.matcher(line);
 				if(newline_matcher.find()&&line.contains(Constant.fixedid)){
@@ -139,7 +141,7 @@ public class OfflineData {
 				Matcher starttime_matcher=Constant.starttime_pattern.matcher(line);
 				if(starttime_matcher.find()){
 					eachPosRss=new ArrayList<>(110);
-					apVector=new Integer[XArr.length];
+					apVector=new Integer[aplist.size()];
 					Tools.cleanArr(apVector);;
 				}
 				Matcher endtime_matcher=Constant.endtime_pattern.matcher(line);
@@ -213,7 +215,7 @@ public class OfflineData {
 		for(List<Map<String, Double>> onePosRss:allRssList){//130次
 			List<Map<Double, Integer>> apRssList=new ArrayList<>(27);
 			for(String ap:aplist){//27次
-				Map<Double, Integer> oneApRss=new HashMap<>();
+				Map<Double, Integer> oneApRss=new TreeMap<>();
 				for(Map<String,Double> oneTimeRss:onePosRss){
 					
 					if(oneTimeRss.get(ap)!=null){
@@ -233,16 +235,16 @@ public class OfflineData {
 	}
 	
 	/**
-	 * 直接对apVector处理
+	 * 直接对apVector处理 通过计算missed AP的概率计算每一个点每一个ap的可信度
 	 */
 	public void buildPenaltyList(){
-		int c=0;
 		for(Integer[] apVector:apVectorlist){
-			for(int cnt:apVector)
-				if(cnt!=0)
-					c++;
-			System.out.println(c);
-			c=0;
+			Map<String,Double> map=new HashMap<>();
+			for(int i=0;i<apVector.length;i++){
+				double prob=apVector[i]/110.0;
+				map.put(aplist.get(i), prob);
+			}
+			penaltyList.add(map);
 		}
 	}
 

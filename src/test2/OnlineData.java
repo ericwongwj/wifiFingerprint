@@ -41,11 +41,11 @@ public class OnlineData {
 	private double timeDensity=1.0;//采集次数密度
 	
 	public static void main(String[] args) {
-		OnlineData on=new OnlineData(Constant.ON_PATH,0.3);			
-//		showApVectorList(on.apVectorlist);
+		OnlineData on=new OnlineData(Constant.ON_PATH,1.0);			
+		showApVectorList(on.apVectorlist);
 //		showRssVectorList(on.rssVectorlist);		
 //		Tools.displayAllRSS(on.allRssList, aplist);
-		showMapList(on.avgRssList);
+//		showMapList(on.avgRssList);
 	}
 	
 	
@@ -71,7 +71,7 @@ public class OnlineData {
 			String line;
 			Map<String,Double> eachTimeRss = null;
 			List<Map<String, Double>> eachPosRss = null;//大小110（次）
-			Integer[] apVector=new Integer[XArr.length];//0-1向量
+			Integer[] apVector=new Integer[aplist.size()];//0-1向量
 			while((line=br.readLine())!=null ){
 				Matcher newline_matcher=Constant.newline_pattern.matcher(line);
 				if(newline_matcher.find()&&line.contains(Constant.fixedid)){
@@ -91,7 +91,7 @@ public class OnlineData {
 				Matcher starttime_matcher=Constant.starttime_pattern.matcher(line);
 				if(starttime_matcher.find()){
 					eachPosRss=new ArrayList<>(110);
-					apVector=new Integer[XArr.length];
+					apVector=new Integer[aplist.size()];
 					Tools.cleanArr(apVector);;
 				}
 				Matcher endtime_matcher=Constant.endtime_pattern.matcher(line);

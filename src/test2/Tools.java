@@ -5,30 +5,45 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class Tools {
 	
 	//传入的是narrow之后的field（一个位置索引列表）
-	static int[] findNNearest(int pnum, ArrayList<Double> dlist){//para1：point number 
-		int []narr=new int[pnum];
-		int i=0;
-		Double[]darr=new Double[dlist.size()];
-		dlist.toArray(darr);
-		while(i<pnum){
-			double min=darr[0];
-			for(int j=0;j<darr.length-1;j++){
-				if(min>darr[j+1]){
-					min=darr[j+1];
-				}
-			}
-			narr[i]=dlist.indexOf(min);
-			System.out.println("min:"+min+" "+narr[i]);
-			darr[narr[i]]=1000.0;//将已经找到的最小距离改为一个很大的值
-			i++;
+//	static int[] findNNearest(int pnum, TreeMap<Double,Integer> treeMap){//para1：point number 
+//		int []narr=new int[pnum];
+//		int i=0;
+//		Double[]darr=new Double[dmap.size()];
+//		for(int p=0;p<darr.length;p++)
+//			darr[p]=-1.0;
+//		int []keys=new int[dmap.size()];
+//		int k=0;
+//		for(double key:dmap.keySet()){
+//			darr[k]=dmap.get(key);
+//			keys[k++]=key;
+//		}
+//		while(i<pnum){
+//			double min=darr[0];
+//			for(int j=0;j<darr.length-1;j++){
+//				if(min>darr[j+1]&&narr[i]){
+//					min=darr[j+1];
+//					narr[i]=keys[j+1];
+//				}
+//			}
+////			System.out.println("min:"+min+" "+narr[i]);
+//			i++;
+//		}
+//		//for(int k=0;k<darr.length;k++) System.out.println(dlist.get(k));
+//		return narr;
+//	}
+	
+	public static boolean isArrayContains(Double darr[],Double value){
+		for(Double d:darr){
+			if(d.equals(value))
+				return true;
 		}
-		//for(int k=0;k<darr.length;k++) System.out.println(dlist.get(k));
-		return narr;
+		return false;
 	}
 	
 	public static double calculateDistance(Map<String, Double> mapoff, Map<String, Double> mapon, List<String> aplist){//计算两个向量之间的距离
@@ -80,9 +95,9 @@ public class Tools {
 	
 	/**返回一个缩小的搜索空间的位置索引表 如果不narrow 那等于是offdensity中把密度调为130*/
 	@Deprecated
-	static ArrayList<Integer> narrowSearchField(ArrayList <ArrayList<Integer>> offApVectorlist,
+	static List<Integer> narrowSearchField(ArrayList <ArrayList<Integer>> offApVectorlist,
 			ArrayList <ArrayList<Integer>> onApVectorlist,int pointid){//返回一个缩小的搜索空间的位置索引表
-		ArrayList<Integer> nearestPosList;//存放的序号代表positionlist的序号
+		List<Integer> nearestPosList;//存放的序号代表positionlist的序号
 		int[] similarityArr=new int[130];//分别对29个ap出现的次数进行计数
 		for(int i=0;i<130;i++){
 			similarityArr[i]=0;
@@ -109,32 +124,34 @@ public class Tools {
 		return nearestPosList;
 	}
 	
-	public static ArrayList<Integer> reduceField(List<Integer[]> apVectorlist,
+	public static List<Integer> reduceField(List<Integer[]> apVectorlist,
 												Integer[] onApVector){//返回一个缩小的搜索空间的位置索引表
-		ArrayList<Integer> invaildPosList;//存放序号
+		List<Integer> invaildPosList;//存放序号
 		int[] similarityArr=new int[130];//分别对ap出现的次数进行计数
 		cleanArr(similarityArr);
 		int posid=0;
 		for(Integer[]offApVector:apVectorlist){//对130个位置进行遍历
-			int k=0;
-			for(Integer j:onApVector){//仅仅对第pointid个点的ap列表进行比较
-				//System.out.println(j+" "+apvector.get(k));//apvector里面是代表有无的01
-				if(offApVector[k++].equals(j)){
+			int k=0;//0-26
+			for(Integer j:onApVector){//27个
+//				System.out.println("on:"+j+" off:"+offApVector[k]+" "+k);//apvector里面是ap出现次数
+				if((offApVector[k]>0&&j>0)||(offApVector[k]==0&&j==0)){
 					similarityArr[posid]++;
 				}
+				k++;
 			}
+//			System.out.println(Constant.OFF_POS_ARR[posid]+" : "+similarityArr[posid]);
 			posid++;
 		}
 //		showArr(similarityArr);
-		invaildPosList=Tools.findSimilarVector(similarityArr);
-//		for(int i=0;i<nearestPosList.size();i++){
-//			System.out.println(i+" "+offPositionlist.get(nearestPosList.get(i)));
-//		}
+		invaildPosList=Tools.findUnSimilarVector(similarityArr);
+
 		return invaildPosList;
 	}
 	
-	static ArrayList<Integer> findSimilarVector(int[] sArr){
-		ArrayList<Integer> spos=new ArrayList<>();
+	static int similar=10;
+	
+	static List<Integer> findSimilarVector(int[] sArr){
+		List<Integer> spos=new ArrayList<>();
 		for(int i=0;i<sArr.length-1;i++){
 			if(sArr[i]>24){/***********这个次数是一个需要调教的参数 而且这样判断有问题*************/
 				spos.add(i);
@@ -144,10 +161,10 @@ public class Tools {
 		return spos;
 	}
 	
-	public static ArrayList<Integer> findUnSimilarVector(int[] sArr){
-		ArrayList<Integer> invalid=new ArrayList<>();
+	public static List<Integer> findUnSimilarVector(int[] sArr){
+		List<Integer> invalid=new ArrayList<>();
 		for(int i=0;i<sArr.length;i++){
-			if(sArr[i]<24){/***********这个次数是一个需要调教的参数 而且这样判断有问题*************/
+			if(sArr[i]<similar){/***********这个次数是一个需要调教的参数 而且这样判断有问题*************/
 				invalid.add(i);
 			}
 			//System.out.println(i+" unsimilar:"+sArr[i]);

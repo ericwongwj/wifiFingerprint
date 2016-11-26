@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class Deterministic {
+public class KMeans {
 	int k;
 	void setK(int k){
 		this.k=k;
