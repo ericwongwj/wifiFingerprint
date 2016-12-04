@@ -20,23 +20,29 @@ public class TestPositioning {
 	static OnlineData online;
 	
 	static List <String> aplist= Arrays.asList(Constant.AP_ARR);//aplist必须统一
-	
-	static ArrayList<Map<String, Double>> penaltyList=new ArrayList<Map<String, Double>>();
-	
-	static double []deviationArr=new double[46];
+		
+	static double []deviationArr=new double[46];//TODO：应该变为 取几个点定位 就生成
 	
 	public static void main(String[] args) {
-		offline=new OfflineData(Constant.OFF_PATH,new OfflineData.Options());
+		//double pd, double td, int nf,double deRss, double avRss   (27,99,-100)WKNN k=4 -1.423 KNN-1.428 avail在-95附近有意义
+		offline=new OfflineData(Constant.OFF_PATH,new OfflineData.Options(1.0,1.0,27,-99,-100));//
 		online=new OnlineData(Constant.ON_PATH,1.0);
-		Tools.similar=23;//不提高精度 24以上误差更大
+		Tools.similar=23;//不提高精度 24以上误差更大 其实没啥用
 		for(int c=0;c<46;c++){//
-//			KNN(online.avgRssList.get(c), 1, c);//5,6精度最好
-			WKNN(online.avgRssList.get(c), 6, c);//6精度最好
+//			KNN(online.avgRssList.get(c), 4, true, c);//5,6精度最好  4+true最好 1.5306
+			WKNN(online.avgRssList.get(c), 4, 0.1, true, c);//6精度最好 4+true 1.5297 exp=0.1:1.4217
 		}
 		Tools.calculateOverAllDeviationAndVariance(deviationArr);
 	}
 	
-	public static void KNN(Map<String,Double> onrss, int k,int index){
+	/**
+	 * 
+	 * @param onrss
+	 * @param k
+	 * @param usePenalty
+	 * @param index
+	 */
+	public static void KNN(Map<String,Double> onrss, int k, boolean usePenalty, int index){
 		//narrow 改为得到一个排除的数组 循环的时候直接判断 
 		List<Integer> invalidField=Tools.reduceField(offline.apVectorlist, online.apVectorlist.get(index));//参数c代表第c个点
 		Map<Double,Integer> distanceMap=new TreeMap<>();//位置（0-129）-距离
@@ -44,13 +50,13 @@ public class TestPositioning {
 
 		int p=0;
 		for(int i=0;i<Constant.OFF_POS_ARR.length;i++){
-			if(invalidField.contains(i))//对限定范围后的所有点
-				continue;
+//			if(invalidField.contains(i)) continue;//对限定范围后的所有点 其实并没有用
 			//计算距离 只计算线下出现的ap 线上线下只出现一个的 默认另一个为-100
 			Map<String,Double> offrss=offline.avgRssList.get(i);
-			double distance;
-			double sum=0;
+			Map<String,Double> penaltyMap=offline.penaltyList.get(i);
+			double distance, sum=0;
 			for(int j=0;j<aplist.size();j++){
+				double penalty=penaltyMap.get(aplist.get(j));
 				double off,on;
 				if(offrss.get(aplist.get(j))!=null)
 					off=offrss.get(aplist.get(j));
@@ -59,7 +65,7 @@ public class TestPositioning {
 				if(onrss.get(aplist.get(j))!=null)
 					on=onrss.get(aplist.get(j));
 				else on=-100.0;
-				sum+=(off-on)*(off-on);
+				sum += usePenalty ? penalty*(off-on)*(off-on) : (off-on)*(off-on);
 			}
 			distance=Math.sqrt(sum);
 			distanceMap.put(distance,i);
@@ -82,15 +88,15 @@ public class TestPositioning {
 		System.out.println("result:"+result[0]+","+result[1]+"   true position:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
 	}
 	
-	public static void WKNN(Map<String,Double> onrss, int k,int index){
-		//narrow 改为得到一个排除的数组 循环的时候直接判断 
+	public static void WKNN(Map<String,Double> onrss, int k, double exp, boolean usePenalty, int index){
 		Map<Double,Integer> distanceMap=new TreeMap<>();//位置（0-129）-距离
 		for(int i=0;i<Constant.OFF_POS_ARR.length;i++){
 			//计算距离 只计算线下出现的ap 线上线下只出现一个的 默认另一个为-100
 			Map<String,Double> offrss=offline.avgRssList.get(i);
-			double distance;
-			double sum=0;
+			Map<String,Double> penaltyMap=offline.penaltyList.get(i);
+			double distance, sum=0;
 			for(int j=0;j<aplist.size();j++){
+				double penalty=penaltyMap.get(aplist.get(j));
 				double off,on;
 				if(offrss.get(aplist.get(j))!=null)
 					off=offrss.get(aplist.get(j));
@@ -99,21 +105,21 @@ public class TestPositioning {
 				if(onrss.get(aplist.get(j))!=null)
 					on=onrss.get(aplist.get(j));
 				else on=-100.0;
-				sum+=(off-on)*(off-on);
+				sum += usePenalty ? penalty*(off-on)*(off-on) : (off-on)*(off-on);
 			}
 			distance=Math.sqrt(sum);
 			distanceMap.put(distance,i);
 //			System.out.println(Constant.OFF_POS_ARR[p++]+" distance "+": "+distance);//输出off与on的距离
 		}
 		
-		double x=0.0,y=0.0,weight=0.0,total=0.0;
+		double x=0.0,y=0.0,weight=0.0;
 		double []weights=new double[k];
 		Iterator<Map.Entry<Double, Integer>> iterator = distanceMap.entrySet().iterator();
 		for(int a=0;a<k;a++){
 			Map.Entry<Double, Integer> entry = iterator.next();  
 			int pos=entry.getValue();
-			weights[a]=1/entry.getKey();
-			weight+=1/entry.getKey();
+			weights[a]=Math.pow(1/entry.getKey(), exp);
+			weight+=Math.pow(1/entry.getKey(), exp);
 //			System.out.println(offline.XArr[pos]+","+offline.YArr[pos]+" d="+entry.getKey()+" weight="+weights[a]);
 		}
 		System.out.println("total weight="+weight);

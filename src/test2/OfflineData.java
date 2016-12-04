@@ -49,13 +49,15 @@ public class OfflineData {
 	private double posDensity;//采集点密度
 	private double timeDensity;//采集次数密度
 	private static double defaultRSS;//默认missed AP为-100
-	private static double availableRSS;//仅使用大于该值的RSS
+	private static double availableRSS=-1000;//是每次的可用值还是平均值可用？
 	
 	public static class Options{
 		double pDensity=1.0;
 		double tDensity=1.0;//采集次数密度
-		double defaultRSS=-100.0;//默认missed AP为-100
-		double availableRSS=-80.0;//仅使用大于该值的RSS
+		
+		int neglect_frequency=0;//将此次数下的ap rss置为default
+		double defaultRSS=-95.0;//默认missed AP为-100
+		double availableRSS=-1000.0;//仅使用大于该值的RSS 默设为极小认为rss都可用 该值和以上两个互斥
 		
 		public Options() {}
 		public Options(String what, double value) {
@@ -65,6 +67,9 @@ public class OfflineData {
 				break;
 			case "time":
 				tDensity=value;
+				break;
+			case "neglect":
+				neglect_frequency=(int)value;
 				break;
 			case "default":
 				defaultRSS=value;
@@ -76,9 +81,10 @@ public class OfflineData {
 				System.out.println("wrong");
 			}
 		}
-		public Options(double p, double t, double deRss, double avRss) {
+		public Options(double p, double t, int nf,double deRss, double avRss) {
 			pDensity=p;
 			tDensity=t;
+			neglect_frequency=nf;
 			defaultRSS=deRss;
 			availableRSS=avRss;
 		}
@@ -88,15 +94,16 @@ public class OfflineData {
 		Options ops=new Options();
 //		ops.pDensity=0.1;
 //		ops.tDensity=0.1;
+		ops.availableRSS=-70;
 		OfflineData offline=new OfflineData(Constant.OFF_PATH,ops);
 		
 //		Tools.displayAllRSS(offline.allRssList, offline.aplist);
-//		showMapList(offline.avgRssList);
+		showMapList(offline.avgRssList);
 //		showMapList(offline.penaltyList);
 //		Tools.showList(aplist);
 //		Tools.showList(poslist);
 //		showApVectorList(offline.apVectorlist);
-		showRssVectorList(offline.rssVectorlist);
+//		showRssVectorList(offline.rssVectorlist);
 	}
 
 	public OfflineData(String path, Options options) {
@@ -104,6 +111,7 @@ public class OfflineData {
 		timeDensity=options.tDensity;
 		defaultRSS=options.defaultRSS;
 		availableRSS=options.availableRSS;
+		neglect_frequency=options.neglect_frequency;
 		initBufferReader(path);
 		initRSSData();
 		buildRssVectorList();//build的是全部的情况
@@ -114,7 +122,7 @@ public class OfflineData {
 		else if(posDensity<1 || timeDensity<1){
 			List<List<Map<String, Double>>> tempRss=initRandPosAndTimeRss(posDensity,timeDensity);
 			generateAvgRss(tempRss);
-		}
+		}else System.out.println("Wrong density!");
 	}
 	
 	public void initRSSData(){
@@ -132,9 +140,10 @@ public class OfflineData {
 					while(rm.find()){//只存储出现的ap
 						String each_ap="00:"+rm.group(1);//m1 mac地址 m2：rss
 						double rss=Double.valueOf(rm.group(2));
-						eachTimeRss.put(each_ap, rss);
 						
+						eachTimeRss.put(each_ap, rss);
 						apVector[aplist.indexOf(each_ap)]++;
+
 					}
 					eachPosRss.add(eachTimeRss);//先添加	
 				}
@@ -154,6 +163,8 @@ public class OfflineData {
 			e.printStackTrace();
 		}
 	}
+	
+	
 	
 	public List<List<Map<String, Double>>> initRandPosAndTimeRss(double pd,double td){
 		List<List<Map<String, Double>>> randRssList=new ArrayList<>();
@@ -176,10 +187,8 @@ public class OfflineData {
 						
 						for(String ap:map.keySet())
 							eachTimeRss.put(ap, map.get(ap));
-						
 					}
 				}
-				
 				randRssList.add(eachPosRss);
 			}
 		}
@@ -192,19 +201,28 @@ public class OfflineData {
 		for(List<Map<String, Double>> eachpos : rssList){
 			Map<String,Double> eachavgrss=new HashMap<>();
 			avgRssList.add(eachavgrss);
-			for(Map<String,Double> eachtime : eachpos){
+			for(Map<String,Double> eachTimeRss : eachpos){
 				for(int i=0;i<aplist.size();i++){
 					String ap=aplist.get(i);
-					if(eachtime.get(ap)!=null){
-						sum[i]+=eachtime.get(ap);
+					Double rss=eachTimeRss.get(ap);
+					if(rss!=null){//一定要加
+						if(rss>availableRSS){
+						sum[i]+=eachTimeRss.get(ap);
 						count[i]++;
+						}
 					}
 				}
 			}	
 			for(int j=0;j<aplist.size();j++){
 				if(count[j]!=0){
-					double avg=sum[j]/count[j];//检测到的次数太少 (count[j]<neglect_frequency ? defaultRSS : sum[j]/count[j]);
-					eachavgrss.put(aplist.get(j), avg);
+					double avg = sum[j]/count[j];
+//					if(availableRSS<=-100){//使用了availableRSS 频率一般不会太少
+						eachavgrss.put(aplist.get(j), count[j]<neglect_frequency ? defaultRSS : avg);
+//					} 
+//					else {//使用availableRSSb 如果平均值-81 实际79 误差就会很大
+//						if(avg<-availableRSS) continue;
+//						else eachavgrss.put(aplist.get(j), avg);
+//					}
 				}
 			}
 			Tools.cleanArr(count, sum);
@@ -248,7 +266,18 @@ public class OfflineData {
 		}
 	}
 
-	public void buildCenterPointsInfo(){	}
+	/**
+	 * 首先可以构建一个四元组，每个四元组对应一个centerpoint 然后再计算
+	 */
+	public void buildCenterPointsInfo(){
+		List<Double> centerX=new ArrayList<>();
+		List<Double> centerY=new ArrayList<>();
+		for(int i=0;i<XArr.length;i++){
+			
+		}
+		for(int i=0;i<centerX.size();i++)
+			System.out.println(centerX.get(i)+","+centerY.get(i));
+	}
 	
 	public void buildBetterRSS(double quality){	}
 	
