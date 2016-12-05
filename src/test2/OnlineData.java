@@ -33,8 +33,10 @@ public class OnlineData {
 	List <List<Map<Double, Integer>>> rssVectorlist=new ArrayList<>();/**每个点每个ap出现的rss以及对应的次数 130*density-26-n*/
 	
 	//应当在读取文件之后再填充
-	public double[] XArr=Constant.ON_X_ARR;
-	public double[] YArr=Constant.ON_Y_ARR;
+//	public double[] XArr=Constant.ON_X_ARR;
+//	public double[] YArr=Constant.ON_Y_ARR;
+	
+	public Point[] points=new Point[Constant.ON_POS_ARR.length];
 		
 	public int number=46;
 	private double availableRSS=-80.0;	
@@ -51,6 +53,7 @@ public class OnlineData {
 	
 	public OnlineData(String path, double td) {
 		timeDensity=td;
+		initPoints();
 		initBr(path);
 		initRSSData();
 		buildRssVectorList();//build的是全部的情况
@@ -60,6 +63,12 @@ public class OnlineData {
 		else if(timeDensity<1){
 			List<List<Map<String, Double>>> tempRss=initRandTimeRss(timeDensity,timeDensity);
 			generateAvgRss(tempRss);
+		}
+	}
+	
+	public void initPoints(){
+		for(int i=0;i<Constant.ON_X_ARR.length;i++){
+			points[i]=new Point(Constant.ON_X_ARR[i], Constant.ON_Y_ARR[i]);
 		}
 	}
 	

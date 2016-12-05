@@ -20,7 +20,8 @@ public class TestPositioning {
 	static OnlineData online;
 	
 	static List <String> aplist= Arrays.asList(Constant.AP_ARR);//aplist必须统一
-		
+	
+	static Point []resultPoints=new Point[46];
 	static double []deviationArr=new double[46];//TODO：应该变为 取几个点定位 就生成
 	
 	public static void main(String[] args) {
@@ -29,8 +30,8 @@ public class TestPositioning {
 		online=new OnlineData(Constant.ON_PATH,1.0);
 		Tools.similar=23;//不提高精度 24以上误差更大 其实没啥用
 		for(int c=0;c<46;c++){//
-//			KNN(online.avgRssList.get(c), 4, true, c);//5,6精度最好  4+true最好 1.5306
-			WKNN(online.avgRssList.get(c), 4, 0.1, true, c);//6精度最好 4+true 1.5297 exp=0.1:1.4217
+			KNN(online.avgRssList.get(c), 4, true, c);//5,6精度最好  4+true最好 1.5306
+//			WKNN(online.avgRssList.get(c), 4, 0.1, true, c);//6精度最好 4+true 1.5297 exp=0.1:1.4217
 		}
 		Tools.calculateOverAllDeviationAndVariance(deviationArr);
 	}
@@ -78,14 +79,13 @@ public class TestPositioning {
 			if(kk++==k)
 				break;
 			int pos=distanceMap.get(d);
-			xsum+=offline.XArr[pos];
-			ysum+=offline.YArr[pos];
+			xsum+=offline.points[pos].x;
+			ysum+=offline.points[pos].y;
 			System.out.println(Constant.OFF_POS_ARR[pos]+" d="+d);
 		}
-		
-		double []result={xsum/k,ysum/k};
-		deviationArr[index]=Tools.calculateDeviation(online.XArr[index], online.YArr[index], result[0], result[1]);
-		System.out.println("result:"+result[0]+","+result[1]+"   true position:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
+		Point result=new Point(xsum/k,ysum/k);
+		deviationArr[index]=online.points[index].distance(result);
+		System.out.println("result:"+result+"   true position:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
 	}
 	
 	public static void WKNN(Map<String,Double> onrss, int k, double exp, boolean usePenalty, int index){
@@ -128,13 +128,13 @@ public class TestPositioning {
 		for(int b=0;b<k;b++){
 			Map.Entry<Double, Integer> entry = entries.next();  
 			int pos=entry.getValue();
-			x+=offline.XArr[pos]*weights[b]/weight;
-			y+=offline.YArr[pos]*weights[b]/weight;
+			x+=offline.points[pos].x*weights[b]/weight;
+			y+=offline.points[pos].y*weights[b]/weight;
 			System.out.println(Constant.OFF_POS_ARR[pos]+" d="+entry.getKey()+" w="+weights[b]);
 		}
-		double []result={x,y};
-		deviationArr[index]=Tools.calculateDeviation(online.XArr[index], online.YArr[index], result[0], result[1]);
-		System.out.println("result:"+result[0]+","+result[1]+"  real pos:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
+		Point result=new Point(x,y);
+		deviationArr[index]=online.points[index].distance(result);
+		System.out.println("result:"+result+"  real pos:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
 				
 	}	
 	

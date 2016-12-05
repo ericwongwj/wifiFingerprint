@@ -40,8 +40,9 @@ public class OfflineData {
 	List <List<Map<Double, Integer>>> rssVectorlist=new ArrayList<>();/**每个点每个ap出现的rss以及对应的次数 130*density-26-n*/
 	
 	//应当在读取文件之后再填充
-	public double[] XArr=Constant.OFF_X_ARR;
-	public double[] YArr=Constant.OFF_Y_ARR;
+	
+	
+	public Point[] points=new Point[Constant.OFF_POS_ARR.length];
 	
 	public int number=130;
 	
@@ -98,7 +99,7 @@ public class OfflineData {
 		OfflineData offline=new OfflineData(Constant.OFF_PATH,ops);
 		
 //		Tools.displayAllRSS(offline.allRssList, offline.aplist);
-		showMapList(offline.avgRssList);
+//		showMapList(offline.avgRssList);
 //		showMapList(offline.penaltyList);
 //		Tools.showList(aplist);
 //		Tools.showList(poslist);
@@ -112,6 +113,7 @@ public class OfflineData {
 		defaultRSS=options.defaultRSS;
 		availableRSS=options.availableRSS;
 		neglect_frequency=options.neglect_frequency;
+		initPoints();
 		initBufferReader(path);
 		initRSSData();
 		buildRssVectorList();//build的是全部的情况
@@ -123,6 +125,13 @@ public class OfflineData {
 			List<List<Map<String, Double>>> tempRss=initRandPosAndTimeRss(posDensity,timeDensity);
 			generateAvgRss(tempRss);
 		}else System.out.println("Wrong density!");
+	}
+	
+	public void initPoints(){
+		for(int i=0;i<Constant.OFF_X_ARR.length;i++){
+			points[i]=new Point(Constant.OFF_X_ARR[i], Constant.OFF_Y_ARR[i]);
+//			System.out.println(points[i]);
+		}
 	}
 	
 	public void initRSSData(){
@@ -197,7 +206,7 @@ public class OfflineData {
 	
 	private void generateAvgRss(List<List<Map<String, Double>>> rssList){
 		int []count=new int [aplist.size()];
-		double []sum=new double[aplist.size()];int t=0;
+		double []sum=new double[aplist.size()];
 		for(List<Map<String, Double>> eachpos : rssList){
 			Map<String,Double> eachavgrss=new HashMap<>();
 			avgRssList.add(eachavgrss);
@@ -268,15 +277,28 @@ public class OfflineData {
 
 	/**
 	 * 首先可以构建一个四元组，每个四元组对应一个centerpoint 然后再计算
+	 *  (-23.5,-10.75) (-23.5,-9.25)
+		(-22.0,-10.75) (-22.0,-9.25)
+		(-20.5,-10.75) (-20.5,-9.25)
+		(-19.0,-10.75) (-19.0,-9.25)
 	 */
 	public void buildCenterPointsInfo(){
-		List<Double> centerX=new ArrayList<>();
-		List<Double> centerY=new ArrayList<>();
-		for(int i=0;i<XArr.length;i++){
-			
+		Set<Point> centers=new HashSet<>();
+		for(Point point:points){
+			//遍历每一个点 计算离点最近的3个点 看是否构成矩形 是则看计算出来的中心点是否已经在set中
+			Point[] nearby=new Point[3];
+			double x=(nearby[0].x+nearby[1].x+nearby[2].x+point.x)/4;
+			double y=(nearby[0].y+nearby[1].y+nearby[2].y+point.y)/4;
+			boolean isContains=false;
+			for(Point center:centers){
+				if(center.x==x&&center.y==y){
+					isContains=true;
+					break;
+				}
+			}
+			if(!isContains)
+				centers.add(new Point(x,y));
 		}
-		for(int i=0;i<centerX.size();i++)
-			System.out.println(centerX.get(i)+","+centerY.get(i));
 	}
 	
 	public void buildBetterRSS(double quality){	}
