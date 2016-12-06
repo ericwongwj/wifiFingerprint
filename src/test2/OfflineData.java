@@ -118,6 +118,7 @@ public class OfflineData {
 		initRSSData();
 		buildRssVectorList();//build的是全部的情况
 		buildPenaltyList();
+//		buildCenterPointsInfo();
 
 		if(posDensity==1 && timeDensity==1)
 			generateAvgRss(allRssList);
@@ -284,11 +285,20 @@ public class OfflineData {
 	 */
 	public void buildCenterPointsInfo(){
 		Set<Point> centers=new HashSet<>();
-		for(Point point:points){
+		for(Point point1:points){
 			//遍历每一个点 计算离点最近的3个点 看是否构成矩形 是则看计算出来的中心点是否已经在set中
-			Point[] nearby=new Point[3];
-			double x=(nearby[0].x+nearby[1].x+nearby[2].x+point.x)/4;
-			double y=(nearby[0].y+nearby[1].y+nearby[2].y+point.y)/4;
+			Map<Double,Point> distanceMap=new TreeMap<>();
+			for(Point point2:points){
+				distanceMap.put(point1.distance(point2), point2);
+			}
+			int n=0;Point[] nearby=new Point[4];
+			for(double d:distanceMap.keySet()){
+				if(n==4) break;
+				nearby[n++]=distanceMap.get(d);
+			}
+			
+			double x=(nearby[0].x+nearby[1].x+nearby[2].x+nearby[3].x)/4;
+			double y=(nearby[0].y+nearby[1].y+nearby[2].y+nearby[3].y)/4;
 			boolean isContains=false;
 			for(Point center:centers){
 				if(center.x==x&&center.y==y){
@@ -296,9 +306,12 @@ public class OfflineData {
 					break;
 				}
 			}
-			if(!isContains)
+			if(!isContains){
+				System.out.println(new Point(x,y));
 				centers.add(new Point(x,y));
+			}
 		}
+//		Tools.showSet(centers);
 	}
 	
 	public void buildBetterRSS(double quality){	}

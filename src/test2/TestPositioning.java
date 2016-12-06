@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+
 import java.math.*;
 /*****
  * 对于侦测到频率较少的ap 是否应当做一些处理？例如向量变为侦测到的次数？
@@ -30,8 +32,9 @@ public class TestPositioning {
 		online=new OnlineData(Constant.ON_PATH,1.0);
 		Tools.similar=23;//不提高精度 24以上误差更大 其实没啥用
 		for(int c=0;c<46;c++){//
-			KNN(online.avgRssList.get(c), 4, true, c);//5,6精度最好  4+true最好 1.5306
+//			KNN(online.avgRssList.get(c), 4, true, c);//5,6精度最好  4+true最好 1.5306
 //			WKNN(online.avgRssList.get(c), 4, 0.1, true, c);//6精度最好 4+true 1.5297 exp=0.1:1.4217
+			positioningALL(offline.rssVectorlist, online);
 		}
 		Tools.calculateOverAllDeviationAndVariance(deviationArr);
 	}
@@ -81,11 +84,11 @@ public class TestPositioning {
 			int pos=distanceMap.get(d);
 			xsum+=offline.points[pos].x;
 			ysum+=offline.points[pos].y;
-			System.out.println(Constant.OFF_POS_ARR[pos]+" d="+d);
+			System.out.println(offline.points[pos]+" d="+d);
 		}
 		Point result=new Point(xsum/k,ysum/k);
 		deviationArr[index]=online.points[index].distance(result);
-		System.out.println("result:"+result+"   true position:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
+		System.out.println("result:"+result+"   real:"+online.points[index]+" deviation:"+deviationArr[index]);
 	}
 	
 	public static void WKNN(Map<String,Double> onrss, int k, double exp, boolean usePenalty, int index){
@@ -134,10 +137,82 @@ public class TestPositioning {
 		}
 		Point result=new Point(x,y);
 		deviationArr[index]=online.points[index].distance(result);
-		System.out.println("result:"+result+"  real pos:"+Constant.ON_POS_ARR[index]+" deviation:"+deviationArr[index]);
+		System.out.println("result:"+result+"   real:"+online.points[index]+" deviation:"+deviationArr[index]);
 				
 	}	
+
+		
+	/**
+	 * 对oneline的每一个点每一次的定位结果进行输出
+	 * @param histogram 包含所有的offline直方图
+	 * @param online 线上数据
+	 */
+	public static void positioningALL(List<List<Map<Double,Integer>>> histogram, OnlineData online){
+		List<List<Map<String, Double>>> onRssList=online.allRssList;
+		for(int i=4;i<5;i++){//onRssList.size()
+			List<Map<String, Double>> onePosRss=onRssList.get(i);
+			System.out.println(online.points[i]);
+			for(Map<String,Double>oneTimeRss:onePosRss){
+				positionUsingHistogram(histogram, oneTimeRss);
+			}
+		}
+	}
+	public static Map<Double,Integer> findMapByAp(List<Map<Double,Integer>> onePosHistogram, String ap){//????
+		int index=aplist.indexOf(ap);
+		for(Map<Double,Integer>oneApHistogram:onePosHistogram){
+			if(oneApHistogram.get(-1.0)==index){
+				return oneApHistogram;
+			}
+		}
+		return null;
+	}
+	public static void positionUsingHistogram(List<List<Map<Double,Integer>>> histogram,Map<String,Double>oneTimeRss){
+		double pArr[]=new double[histogram.size()];//记录每个点的概率
+		Tools.cleanArr(pArr);
+		for(int i=0;i<histogram.size();i++){
+			List<Map<Double,Integer>> onePosHistogram=histogram.get(i);
+			double p=1.0;//这个点的概率
+			for(String ap:oneTimeRss.keySet()){//只比对 线上线下都有的 可以考虑对缺失的点进行处理
+				double onrss=oneTimeRss.get(ap);
+				Map<Double,Integer> oneApHistogram=findMapByAp(onePosHistogram, ap);//可能找不到这个ap
+//				System.out.println(oneApHistogram.get(onrss));
+				if(oneApHistogram!=null)
+					if(oneApHistogram.get(onrss)!=null)
+						p+=oneApHistogram.get(onrss);//这样写是次数之和
+			}
+			pArr[i]=p;
+		}
+		Tools.showArr(pArr);
+		int []maxIndex=getNMax(pArr,4);
+		double x = 0,y = 0;
+		for(int i=0;i<maxIndex.length;i++){
+			x+=offline.points[maxIndex[i]].x;
+			y+=offline.points[maxIndex[i]].y;
+		}
+		System.out.println(maxIndex[0]+" "+maxIndex[1]+" "+maxIndex[2]+" "+maxIndex[3]);
+		System.out.println("result:"+x/4+","+y/4);
+	}
 	
+	//返回pArr中的index
+	public static int[] getNMax(double []parr,int n){
+		int []idx=new int[n];
+		double []temp=new double[n];
+		int i=0;
+		while(i<n){//取n个点
+			int index=0;
+			double max=parr[0];
+			for(int j=0;j<parr.length-1;j++){//找到当前数组中值最大的位置
+				if(max<parr[j+1]){
+					max=parr[j+1];
+					index=j+1;
+				}
+			}
+			idx[i]=index;
+			parr[index]=-1000.0;//将已经找到的最大距离改为一个很小的值 注意此时原数组值已经改变
+			i++;
+		}
+		return idx;
+	}
 	
 }
 
