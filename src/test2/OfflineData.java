@@ -37,7 +37,11 @@ public class OfflineData {
 
 	List<Map<String, Double>> penaltyList=new ArrayList<>();/**和平均值相对于 记录每个点每个ap的可信度(1-P(miss))*/
 	List<Map<String, Double>> avgRssList=new ArrayList<>();/**平均值*/
-	List <List<Map<Double, Integer>>> rssVectorlist=new ArrayList<>();/**每个点每个ap出现的rss以及对应的次数 130*density-26-n*/
+	
+	/**每个点每个ap出现的rss以及对应的次数 每一层大小：130*density-26-n 
+	 * 使用TreeMap保证rss是升序的
+	 * TreeMap的list按AP顺序添加*/
+	List <List<TreeMap<Double, Integer>>> rssVectorlist=new ArrayList<>();
 	
 	//应当在读取文件之后再填充
 	
@@ -104,7 +108,7 @@ public class OfflineData {
 //		Tools.showList(aplist);
 //		Tools.showList(poslist);
 //		showApVectorList(offline.apVectorlist);
-//		showRssVectorList(offline.rssVectorlist);
+		showRssVectorList(offline.rssVectorlist);
 	}
 
 	public OfflineData(String path, Options options) {
@@ -241,9 +245,9 @@ public class OfflineData {
 	
 	public void buildRssVectorList(){
 		for(List<Map<String, Double>> onePosRss:allRssList){//130次
-			List<Map<Double, Integer>> apRssList=new ArrayList<>(27);
+			List<TreeMap<Double, Integer>> apRssList=new ArrayList<>(27);
 			for(String ap:aplist){//27次
-				Map<Double, Integer> oneApRss=new TreeMap<>();
+				TreeMap<Double, Integer> oneApRss=new TreeMap<>();
 				for(Map<String,Double> oneTimeRss:onePosRss){
 					
 					if(oneTimeRss.get(ap)!=null){
@@ -346,10 +350,10 @@ public class OfflineData {
 		}
 	}
 	
-	public static void showRssVectorList(List <List<Map<Double, Integer>>> list){
+	public static void showRssVectorList(List <List<TreeMap<Double, Integer>>> list){
 		System.out.println("size="+list.size());
 		int i=0;
-		for(List<Map<Double, Integer>> apRssList:list){
+		for(List<TreeMap<Double, Integer>> apRssList:list){
 			System.out.println(Constant.OFF_POS_ARR[i++]+"  ****************************************");
 			int j=0;
 			for(Map<Double, Integer> map:apRssList){
@@ -360,7 +364,7 @@ public class OfflineData {
 						total+=map.get(rss);
 						System.out.println("rss="+rss+" times="+map.get(rss));
 					}
-					System.out.println("total times="+total);
+					System.out.println("total times="+total+"---------------------------------------");
 				}				
 				j++;
 			}

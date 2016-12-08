@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,7 +36,7 @@ public class TestPositioning {
 		for(int c=0;c<46;c++){//
 //			KNN(online.avgRssList.get(c), 4, true, c);//5,6精度最好  4+true最好 1.5306
 //			WKNN(online.avgRssList.get(c), 4, 0.1, true, c);//6精度最好 4+true 1.5297 exp=0.1:1.4217
-			positioningALL(offline.rssVectorlist, online);
+			positioningOnePos(offline.rssVectorlist, online.allRssList.get(c), 4, c);			
 		}
 		Tools.calculateOverAllDeviationAndVariance(deviationArr);
 	}
@@ -143,75 +145,59 @@ public class TestPositioning {
 
 		
 	/**
-	 * 对oneline的每一个点每一次的定位结果进行输出
-	 * @param histogram 包含所有的offline直方图
+	 * 概率算法对online的每一个点每一次的定位结果进行输出
+	 * @param rssVectorlist 包含所有的offline直方图
 	 * @param online 线上数据
 	 */
-	public static void positioningALL(List<List<Map<Double,Integer>>> histogram, OnlineData online){
-		List<List<Map<String, Double>>> onRssList=online.allRssList;
-		for(int i=4;i<5;i++){//onRssList.size()
-			List<Map<String, Double>> onePosRss=onRssList.get(i);
-			System.out.println(online.points[i]);
-			for(Map<String,Double>oneTimeRss:onePosRss){
-				positionUsingHistogram(histogram, oneTimeRss);
-			}
+	public static void positioningOnePos(List<List<TreeMap<Double,Integer>>> rssVectorlist, List<Map<String, Double>> onePosRss,int k, int c){
+		System.out.println(Constant.ON_POS_ARR[c]+"******************");
+		double []deviations=new double[onePosRss.size()];
+		for(int i=0;i<onePosRss.size();i++){//
+			Map<String,Double>oneTimeRss=onePosRss.get(i);
+			Point result=positionUsingHistogram(rssVectorlist, oneTimeRss, k, false);
+			deviations[i]=result.distance(online.points[c]);
+			System.out.println("time "+i+"    result"+result+"   deviation:"+deviations[i]);
 		}
-	}
-	public static Map<Double,Integer> findMapByAp(List<Map<Double,Integer>> onePosHistogram, String ap){//????
-		int index=aplist.indexOf(ap);
-		for(Map<Double,Integer>oneApHistogram:onePosHistogram){
-			if(oneApHistogram.get(-1.0)==index){
-				return oneApHistogram;
-			}
-		}
-		return null;
-	}
-	public static void positionUsingHistogram(List<List<Map<Double,Integer>>> histogram,Map<String,Double>oneTimeRss){
-		double pArr[]=new double[histogram.size()];//记录每个点的概率
-		Tools.cleanArr(pArr);
-		for(int i=0;i<histogram.size();i++){
-			List<Map<Double,Integer>> onePosHistogram=histogram.get(i);
-			double p=1.0;//这个点的概率
-			for(String ap:oneTimeRss.keySet()){//只比对 线上线下都有的 可以考虑对缺失的点进行处理
-				double onrss=oneTimeRss.get(ap);
-				Map<Double,Integer> oneApHistogram=findMapByAp(onePosHistogram, ap);//可能找不到这个ap
-//				System.out.println(oneApHistogram.get(onrss));
-				if(oneApHistogram!=null)
-					if(oneApHistogram.get(onrss)!=null)
-						p+=oneApHistogram.get(onrss);//这样写是次数之和
-			}
-			pArr[i]=p;
-		}
-		Tools.showArr(pArr);
-		int []maxIndex=getNMax(pArr,4);
-		double x = 0,y = 0;
-		for(int i=0;i<maxIndex.length;i++){
-			x+=offline.points[maxIndex[i]].x;
-			y+=offline.points[maxIndex[i]].y;
-		}
-		System.out.println(maxIndex[0]+" "+maxIndex[1]+" "+maxIndex[2]+" "+maxIndex[3]);
-		System.out.println("result:"+x/4+","+y/4);
+		double alldeviation=0;
+		for(double d:deviations)
+			alldeviation+=d;
+		deviationArr[c]=alldeviation/(double)deviations.length;
+		System.out.println("one point deviation:"+deviationArr[c]);
 	}
 	
-	//返回pArr中的index
-	public static int[] getNMax(double []parr,int n){
-		int []idx=new int[n];
-		double []temp=new double[n];
-		int i=0;
-		while(i<n){//取n个点
-			int index=0;
-			double max=parr[0];
-			for(int j=0;j<parr.length-1;j++){//找到当前数组中值最大的位置
-				if(max<parr[j+1]){
-					max=parr[j+1];
-					index=j+1;
+	/**
+	 * 取概率最大的n个点 然后再类似kNN/wkNN
+	 * @param rssVectorlist
+	 * @param oneTimeRss
+	 */
+	public static Point positionUsingHistogram(List<List<TreeMap<Double,Integer>>> rssVectorlist,Map<String,Double>oneTimeRss, int k, boolean isWeight){
+		Map<Double,Integer> probMap=new TreeMap<>();//每个点的<概率——点编号>
+		for(int i=0;i<rssVectorlist.size();i++){//对线下的所有点
+			List<TreeMap<Double,Integer>> onePosHistogram=rssVectorlist.get(i);//Map<rss times> list大小为ap数量 list顺序为aplist的顺序
+			double p=0.0;//这个点的衡量指标 可以是概率
+			int j=0;
+			for(String ap:aplist){
+				Double onrss=oneTimeRss.get(ap);//会不会为空？
+				if(onrss!=null){
+					Map<Double,Integer> rssVector=onePosHistogram.get(j);
+					Integer times=rssVector.get(onrss);
+					if(times!=null)
+						p-=times;//用负的可以方便找最小，即实际上的最大值
 				}
+				j++;
 			}
-			idx[i]=index;
-			parr[index]=-1000.0;//将已经找到的最大距离改为一个很小的值 注意此时原数组值已经改变
-			i++;
+			probMap.put(p, i);
 		}
-		return idx;
+		
+		double x = 0,y = 0;int i=0;
+		for(double prob:probMap.keySet()){
+			if(i++==k) break;
+			int index=probMap.get(prob);
+//			System.out.println((i-1)+" "+Constant.OFF_POS_ARR[index]+" prob="+(-prob));
+			x+=offline.points[index].x;
+			y+=offline.points[index].y;
+		}
+		return new Point(x/4,y/4);
 	}
 	
 }
